@@ -6,8 +6,47 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
-
+import pymongo
+import settings
 
 class BooksPipeline:
     def process_item(self, item, spider):
+        return item
+
+class MongoPipeline:
+    COLLECTION_NAME ="books"
+
+    def __init__(self, mongo_db, mongo_uri):
+        # Initializes the pipeline with the MongoDB URI and database name
+
+        self.mongo_uri = mongo_uri
+        self.mongo_db = mongo_db
+
+    @classmethod
+    def from_crawler(cls, crawler):
+        # It gives you access to all core Scrapy components, such as the settings.
+        # It creates a pipeline from a Crawler in order to make the general project settings
+        # available to the pipeline.
+
+        return cls(
+            mongo_uri = settings.get("MONGO_URI"),
+            mongo_db = settings.get("MONGO_DATABASE"),
+        )
+    
+    def open_spider(self, spider):
+        # It opens a connection to MongoDB when the spider starts.
+
+        self.client = pymongo.MongoClient(self.mongo_uri)
+        self.db = self.client[self.mongo_db]
+
+    def close_spider(self, spider):
+        # It closes the MongoDB connection when the spider finishes.
+
+        self.client.close()
+
+    def process_client(self, item, spider):
+        # It inserts each scraped item into the MongoDB collection.
+
+
+        self.db[self.COLLECTION_NAME].insert_one(ItemAdapter(item).asdict())
         return item
