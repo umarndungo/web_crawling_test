@@ -7,7 +7,9 @@
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
 import pymongo
+import hashlib
 from . import settings
+from scrapy.exceptions import DropItem
 '''
 class BooksPipeline:
     def process_item(self, item, spider):
@@ -46,7 +48,25 @@ class MongoPipeline:
 
     def process_item(self, item, spider):
         # It inserts each scraped item into the MongoDB collection.
+        # It only adds unique values.
+        item_id = self.compute_item_id(item)
+        item_dict = ItemAdapter(item).asdict()
 
 
-        self.db[self.COLLECTION_NAME].insert_one(ItemAdapter(item).asdict())
+        self.db[self.COLLECTION_NAME].update_one(
+            # A filter to find the document in the db using item_id
+            filter={"_id": item_id},
+
+            # Update the item in the db as a dictionary
+            update={"$set": item_dict},
+
+            # Only update the item if it does not exist
+            upsert=True
+        )
+
         return item
+
+    def compute_item_id(self, item):
+        # Encodes the url into a sha256 unique id
+        url = item["url"]
+        return hashlib.sha256(url.encode("utf-8")).hexdigest()
