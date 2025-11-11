@@ -10,4 +10,11 @@ class BooksItem(scrapy.Item):
     # define the fields for your item here like:
     url = scrapy.Field()
     title = scrapy.Field()
-    price = scrapy.Field()
+    description = scrapy.Field()
+    category = scrapy.Field()
+    price_excl_tax = scrapy.Field()
+    price_incl_tax = scrapy.Field()
+    availability = scrapy.Field()
+    reviews = scrapy.Field()
+    image_url = scrapy.Field()
+    rating = scrapy.Field()
