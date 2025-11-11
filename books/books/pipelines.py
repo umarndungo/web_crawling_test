@@ -6,8 +6,7 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
-import pymongo
-import hashlib
+import pymongo, datetime, hashlib
 from . import settings
 from scrapy.exceptions import DropItem
 '''
@@ -51,6 +50,9 @@ class MongoPipeline:
         # It only adds unique values.
         item_id = self.compute_item_id(item)
         item_dict = ItemAdapter(item).asdict()
+        item['crawl_timestamp'] = datetime.datetime.now()
+        item['status'] = 'success'
+        
 
 
         self.db[self.COLLECTION_NAME].update_one(

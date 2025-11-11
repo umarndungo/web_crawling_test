@@ -18,3 +18,5 @@ class BooksItem(scrapy.Item):
     reviews = scrapy.Field()
     image_url = scrapy.Field()
     rating = scrapy.Field()
+    crawl_timestamp = scrapy.Field()
+    status = scrapy.Field()

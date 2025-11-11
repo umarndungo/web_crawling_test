@@ -14,6 +14,9 @@ NEWSPIDER_MODULE = "books.spiders"
 
 ADDONS = {}
 
+# RETRY SETUP
+RETRY_HTTP_CODES = [500, 502, 503, 504, 408]
+RETRY_TIMES = 3
 
 # MONGODB setup
 MONGO_URI = "mongodb://127.0.0.1:27017"
