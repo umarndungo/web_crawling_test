@@ -7,12 +7,12 @@
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
 import pymongo
-import settings
-
+from . import settings
+'''
 class BooksPipeline:
     def process_item(self, item, spider):
         return item
-
+'''
 class MongoPipeline:
     COLLECTION_NAME ="books"
 
@@ -29,8 +29,8 @@ class MongoPipeline:
         # available to the pipeline.
 
         return cls(
-            mongo_uri = settings.get("MONGO_URI"),
-            mongo_db = settings.get("MONGO_DATABASE"),
+            mongo_uri = crawler.settings.get("MONGO_URI"),
+            mongo_db = crawler.settings.get("MONGO_DATABASE"),
         )
     
     def open_spider(self, spider):
@@ -44,7 +44,7 @@ class MongoPipeline:
 
         self.client.close()
 
-    def process_client(self, item, spider):
+    def process_item(self, item, spider):
         # It inserts each scraped item into the MongoDB collection.
 
 
