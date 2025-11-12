@@ -28,6 +28,8 @@ This Scrapy project is a robust web crawler designed to scrape book data from th
 │   │   └── spiders/
 │   │       └── book.py       # The main spider for crawling the website.
 │   └── scrapy.cfg            # Scrapy project configuration file.
+├── fastapi_app/
+│   └── main.py               # The FastAPI application.
 ├── reporting.py              # Standalone script for generating daily change reports.
 ├── requirements.txt          # Project dependencies.
 └── README.md                 # This file.
@@ -115,6 +117,41 @@ Run `crontab -e` and add the following line to generate a CSV report every day a
 ```
 0 2 * * * /path/to/your/project/venv/bin/python /path/to/your/project/reporting.py --format csv
 ```
+
+### FastAPI Book API
+
+A RESTful API built with FastAPI to serve book information. It provides endpoints for listing books with filtering, sorting, and pagination, retrieving detailed book information by ID, and viewing recent changes.
+
+#### Project Structure
+
+```
+web_crawling_test/
+├── fastapi_app/
+│   └── main.py               # The FastAPI application.
+└── ...
+```
+
+#### How to Use the FastAPI
+
+1.  **Navigate to the FastAPI application directory:**
+    ```bash
+    cd fastapi_app
+    ```
+2.  **Run the FastAPI application:**
+    ```bash
+    # Assuming your virtual environment is activated and dependencies are installed
+    uvicorn main:app --reload
+    ```
+    The API will be accessible at `http://127.0.0.1:8000`.
+
+3.  **Access API Documentation:**
+    You can view the interactive API documentation (Swagger UI) at `http://127.0.0.1:8000/docs`.
+
+#### API Endpoints
+
+*   **`GET /books`**: Retrieve a list of books. Supports query parameters for `category`, `min_price`, `max_price`, `rating`, `sort_by` (rating, price, reviews), and pagination (`skip`, `limit`).
+*   **`GET /books/{book_id}`**: Retrieve full details about a specific book by its ID.
+*   **`GET /changes`**: View recent updates (e.g., price changed, new book added).
 
 ## Dependencies
 
