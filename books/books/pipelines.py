@@ -1,74 +1,73 @@
-# Define your item pipelines here
-#
-# Don't forget to add your pipeline to the ITEM_PIPELINES setting
-# See: https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-
-
-# useful for handling different item types with a single interface
-from itemadapter import ItemAdapter
-import pymongo, datetime, hashlib
-from . import settings
+import motor.motor_asyncio
+from pydantic import ValidationError
 from scrapy.exceptions import DropItem
-'''
-class BooksPipeline:
-    def process_item(self, item, spider):
-        return item
-'''
+from .schema import Book
+
 class MongoPipeline:
-    COLLECTION_NAME ="books"
+    """
+    An asynchronous pipeline that validates Pydantic items and stores them in MongoDB.
+    It saves book data to a 'books' collection and raw HTML to a 'raw_html' collection.
+    """
+    BOOKS_COLLECTION = "books"
+    HTML_COLLECTION = "raw_html"
 
-    def __init__(self, mongo_db, mongo_uri):
-        # Initializes the pipeline with the MongoDB URI and database name
-
+    def __init__(self, mongo_uri, mongo_db):
         self.mongo_uri = mongo_uri
         self.mongo_db = mongo_db
 
     @classmethod
     def from_crawler(cls, crawler):
-        # It gives you access to all core Scrapy components, such as the settings.
-        # It creates a pipeline from a Crawler in order to make the general project settings
-        # available to the pipeline.
-
         return cls(
-            mongo_uri = crawler.settings.get("MONGO_URI"),
-            mongo_db = crawler.settings.get("MONGO_DATABASE"),
+            mongo_uri=crawler.settings.get("MONGO_URI"),
+            mongo_db=crawler.settings.get("MONGO_DATABASE", "books_db"),
         )
-    
-    def open_spider(self, spider):
-        # It opens a connection to MongoDB when the spider starts.
 
-        self.client = pymongo.MongoClient(self.mongo_uri)
+    def open_spider(self, spider):
+        """Connect to MongoDB when the spider is opened."""
+        self.client = motor.motor_asyncio.AsyncIOMotorClient(self.mongo_uri)
         self.db = self.client[self.mongo_db]
+        spider.logger.info("MongoDB connection opened.")
 
     def close_spider(self, spider):
-        # It closes the MongoDB connection when the spider finishes.
-
+        """Close MongoDB connection when the spider is closed."""
         self.client.close()
+        spider.logger.info("MongoDB connection closed.")
 
-    def process_item(self, item, spider):
-        # It inserts each scraped item into the MongoDB collection.
-        # It only adds unique values.
-        item_id = self.compute_item_id(item)
-        item_dict = ItemAdapter(item).asdict()
-        item['crawl_timestamp'] = datetime.datetime.now()
-        item['status'] = 'success'
-        
+    async def process_item(self, item, spider):
+        """
+        Process, validate, and save the item in MongoDB.
+        This method is now asynchronous.
+        """
+        if not isinstance(item, Book):
+            return item
 
+        try:
+            # The spider yields a Pydantic model directly. We dump it to a dict.
+            item_dict = item.model_dump(by_alias=True)
+            
+            # Separate raw_html for its own collection
+            raw_html = item_dict.pop("raw_html", None)
 
-        self.db[self.COLLECTION_NAME].update_one(
-            # A filter to find the document in the db using item_id
-            filter={"_id": item_id},
+            # Upsert the main book data
+            await self.db[self.BOOKS_COLLECTION].update_one(
+                {"_id": item.id},
+                {"$set": item_dict},
+                upsert=True
+            )
+            
+            # If raw_html exists, save it to the raw_html collection
+            if raw_html:
+                await self.db[self.HTML_COLLECTION].update_one(
+                    {"_id": item.id},
+                    {"$set": {"_id": item.id, "html": raw_html}},
+                    upsert=True
+                )
 
-            # Update the item in the db as a dictionary
-            update={"$set": item_dict},
-
-            # Only update the item if it does not exist
-            upsert=True
-        )
+        except ValidationError as e:
+            spider.logger.error(f"Pydantic validation error for item {item.title}: {e}")
+            raise DropItem("Failed Pydantic validation")
+        except Exception as e:
+            spider.logger.error(f"Error processing item in MongoPipeline: {e}")
+            raise DropItem(f"Pipeline error: {e}")
 
         return item
-
-    def compute_item_id(self, item):
-        # Encodes the url into a sha256 unique id
-        url = item["url"]
-        return hashlib.sha256(url.encode("utf-8")).hexdigest()

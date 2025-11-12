@@ -114,7 +114,10 @@ dmypy.json
 .pyre/
 
 # pytype static type analyzer
-.pytype/
+.type/
 
 # Cython debug symbols
 cython_debug/
+
+# Scrapy crawl state
+crawls/

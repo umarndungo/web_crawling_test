@@ -1,5 +1,5 @@
 import scrapy
-from books.items import BooksItem
+from ..schema import Book
 
 class BookSpider(scrapy.Spider):
     name = "book"
@@ -7,82 +7,49 @@ class BookSpider(scrapy.Spider):
     start_urls = ["https://books.toscrape.com/"]
 
     def parse(self, response):
-        try:
+        """
+        This function parses the main page, extracts links to individual book pages,
+        and follows them. It also handles pagination.
+        """
+        # Follow links to individual book pages
+        for book_link in response.css("article.product_pod h3 > a::attr(href)").getall():
+            yield response.follow(book_link, callback=self.parse_book_details)
 
-            for book in response.css("article.product_pod"):
-                item = BooksItem()
-                item["url"] = book.css("h3 > a::attr(href)").get()
-
-                # Instead of adding the title and price, 
-                # let's follow the link to the book page to scrape what we need
-                yield response.follow(
-                    item["url"],
-                    callback=self.parse_book_details,
-                    meta={'item': item}
-                )
-
-            # Handling pagination: Crawling through the pages
-            next_page = response.css("li.next > a::attr(href)").get()
-            if next_page:
-                next_page_url = response.urljoin(next_page)
-                yield scrapy.Request(url=next_page_url, callback=self.parse)
-
-        except Exception as e:
-            self.logger.error(
-                f"An error occured in parse method for URL {response.url}: {e}",
-                exc_info=True
-            )
+        # Follow pagination link
+        next_page = response.css("li.next > a::attr(href)").get()
+        if next_page:
+            yield response.follow(next_page, callback=self.parse)
 
     def parse_book_details(self, response):
-        '''
-        TODO: Figure out how to handle pagination by using the book item url, 
-            to gather the following data:        
-                • Name of the book 
-                • Description of the book 
-                • Book category 
-                • Book prices (Including and Excluding taxes) 
-                • Availability
-
-                • Number of reviews 
-                • The image URL of the book cover 
-                • Rating of the book
-        '''
+        """
+        This function parses the book detail page, extracts all the required data,
+        and yields a Pydantic `Book` object.
+        """
         try:
+            # Helper for extracting table data
+            def get_table_value(key: str) -> str:
+                return response.xpath(f"//th[text()='{key}']/following-sibling::td/text()").get()
 
-            item = response.meta['item']
-
-            # Scrape the data from the detail page
-            main = response.css("div.product_main")
-            title = main.css("h1::text").get()
-            if title:
-                item["title"] = title
-            else:
-                self.logger.warning(f"Title not found for page: {response.url}")
-                item['title'] = "N/A"
-            item["description"] = response.css("article.product_page > p::text").get()
-            item["category"] = response.css("ul.breadcrumb > li:nth-last-child(2)> a::text").get()
-
-            # Prices and availability
-            table = response.css("table.table-striped")
-            item["price_excl_tax"] = table.css("tr:nth-child(3) > td::text").get()
-            item["price_incl_tax"] = table.css("tr:nth-child(4) > td::text").get()
-            item["availability"] = table.css("tr:nth-child(6) > td::text").get()
+            # Construct the Pydantic item
+            book_data = {
+                "url": response.url,
+                "_id": Book.compute_id(response.url),
+                "title": response.css("div.product_main h1::text").get(),
+                "description": response.xpath("//div[@id='product_description']/following-sibling::p/text()").get(),
+                "category": response.xpath("//ul[@class='breadcrumb']/li[3]/a/text()").get(),
+                "price_incl_tax": get_table_value("Price (incl. tax)"),
+                "price_excl_tax": get_table_value("Price (excl. tax)"),
+                "availability": get_table_value("Availability"),
+                "reviews": int(get_table_value("Number of reviews")),
+                "image_url": response.urljoin(response.css("div.item.active > img::attr(src)").get()),
+                "rating": response.css("p.star-rating::attr(class)").get().replace("star-rating ", ""),
+                "raw_html": response.body.decode('utf-8'),
+            }
             
-            # Number of reviews
-            item["reviews"] = table.css("tr:nth-child(7) > td::text").get()
-            
-            # Image URL
-            item["image_url"] = response.urljoin(response.css("div.item.active > img::attr(src)").get())
-            
-            # Rating
-            star_rating_class = response.css("p.star-rating::attr(class)").get()
-            item["rating"] = star_rating_class.replace("star-rating ", "") if star_rating_class else "Not rated"
-            
-            yield item
+            yield Book(**book_data)
 
         except Exception as e:
             self.logger.error(
                 f"Failed to parse book details for URL {response.url}: {e}", 
                 exc_info=True
             )
-
