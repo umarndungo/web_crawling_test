@@ -121,3 +121,5 @@ cython_debug/
 
 # Scrapy crawl state
 crawls/
+
+daily_report.*
